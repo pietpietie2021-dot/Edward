@@ -1,7 +1,7 @@
 ---
 title: "Receive ZipDrop Event Notifications via Webhooks"
 sidebarTitle: "Webhooks"
-description: "ZipDrop webhooks send real-time HTTP POST notifications to your server when key events occur, such as a mechanic accepting a request or a job being completed."
+description: "ZipDrop webhooks push real-time event notifications to your server when key events occur, such as a mechanic accepting a request or a job being completed."
 ---
 
 Webhooks let ZipDrop push event notifications to your server the moment something meaningful happens — a mechanic accepts a request, a job is completed, or a driver cancels. Rather than polling the API repeatedly to check for state changes, you register an HTTPS endpoint and ZipDrop delivers a `POST` request to it automatically. This is the recommended approach for building real-time integrations such as driver-facing status updates, fleet dashboards, and billing reconciliation pipelines.
@@ -30,6 +30,60 @@ Before you register an endpoint with ZipDrop, make sure your server is publicly 
     Click **Save**. ZipDrop immediately sends a test event (`webhook.test`) to your endpoint to confirm it is reachable and returning a `2xx` status. The dashboard shows whether the test delivery succeeded.
   </Step>
 </Steps>
+
+## Registering a webhook via the API
+
+You can also register webhook endpoints programmatically using `POST /v1/webhooks`. This is useful for automated provisioning, multi-tenant platforms that create per-customer endpoints at runtime, or CI/CD pipelines that set up webhook configuration as part of a deployment.
+
+### Request
+
+Send a JSON body containing the endpoint URL and the list of events you want to subscribe to:
+
+```json
+{
+  "url": "https://yourapp.example.com/webhooks/zipdrop",
+  "events": [
+    "request.created",
+    "request.mechanic_assigned",
+    "job.completed"
+  ]
+}
+```
+
+Set `events` to `["*"]` to subscribe to all current and future events.
+
+### Response
+
+A successful `201 Created` response returns the registered webhook object, including the signing secret you must use to verify incoming payloads:
+
+```json
+{
+  "id": "wh_01hxyz",
+  "url": "https://yourapp.example.com/webhooks/zipdrop",
+  "events": [
+    "request.created",
+    "request.mechanic_assigned",
+    "job.completed"
+  ],
+  "secret": "whsec_abcdef1234567890",
+  "created_at": "2024-06-15T14:00:00Z"
+}
+```
+
+Store the `secret` value securely — it is shown only once in the API response and is used to verify the `X-ZipDrop-Signature` header on every delivery. See [Verifying webhook signatures](#verifying-webhook-signatures) for details.
+
+### cURL example
+
+```bash
+curl https://api.zipdrop.app/v1/webhooks \
+  -X POST \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://yourapp.example.com/webhooks/zipdrop",
+    "events": ["request.created", "request.mechanic_assigned", "job.completed"]
+  }'
+```
 
 ## Available events
 

@@ -1,7 +1,7 @@
 ---
 title: "Authenticate with the ZipDrop API Using API Keys"
 sidebarTitle: "Authentication"
-description: "ZipDrop uses API keys for authentication. Generate your key from the developer dashboard, pass it as a Bearer token, and keep it secret."
+description: "ZipDrop API authentication uses API keys and tokens. Generate your key in the dashboard, call POST /v1/auth/token, and pass the result as a Bearer token."
 ---
 
 ZipDrop authenticates API requests using API keys. Every request you make to the ZipDrop API must include a valid API key — requests without one are rejected before they reach any endpoint logic. Your API key identifies your application and determines which actions your integration is authorised to perform, so generating, storing, and rotating it carefully is an essential part of building a secure integration.
@@ -81,6 +81,58 @@ data = response.json()
 ```
 
 </CodeGroup>
+
+## Obtaining a token via API
+
+In addition to long-lived API keys generated in the dashboard, ZipDrop supports programmatic token issuance via the `POST /v1/auth/token` endpoint. This is useful for server-to-server integrations where you want short-lived access tokens scoped to specific credentials, or for machine clients that authenticate with a client ID and secret rather than a user-generated key.
+
+### Request
+
+Send your credentials in the JSON request body. ZipDrop accepts two credential formats:
+
+**Email and password** (for user-owned accounts):
+
+```json
+{
+  "email": "you@example.com",
+  "password": "your-password"
+}
+```
+
+**Client ID and secret** (for service accounts and machine clients):
+
+```json
+{
+  "client_id": "cli_01hxyz",
+  "client_secret": "YOUR_CLIENT_SECRET"
+}
+```
+
+### Response
+
+A successful request returns an access token and its lifetime in seconds:
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 3600
+}
+```
+
+Use the `access_token` value as the Bearer token in the `Authorization` header of subsequent requests, exactly as you would with a dashboard-generated API key. The token expires after the number of seconds indicated by `expires_in` — request a new token before it expires to maintain uninterrupted access.
+
+### cURL example
+
+```bash
+curl https://api.zipdrop.app/v1/auth/token \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "cli_01hxyz",
+    "client_secret": "YOUR_CLIENT_SECRET"
+  }'
+```
 
 ## Authentication errors
 

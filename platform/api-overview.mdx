@@ -34,12 +34,83 @@ See [Authentication](/platform/authentication) for instructions on generating yo
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| `POST` | `/v1/auth/token` | Obtain an API access token |
 | `POST` | `/v1/requests` | Create a new breakdown request |
 | `GET` | `/v1/requests/{id}` | Get request status and mechanic ETA |
 | `DELETE` | `/v1/requests/{id}` | Cancel an active request |
 | `GET` | `/v1/mechanics/nearby` | List available mechanics near a location |
+| `POST` | `/v1/webhooks` | Register a webhook endpoint |
 | `GET` | `/v1/jobs/{id}` | Get job details (mechanic-facing) |
 | `PATCH` | `/v1/jobs/{id}/status` | Update job status (mechanic-facing) |
+
+## Request and response examples
+
+The examples below show the most common API interactions. For full parameter references and additional examples, see the individual endpoint pages.
+
+### Create a breakdown request
+
+Send a `POST` request to `/v1/requests` with the driver's location and issue type. ZipDrop matches the driver to the nearest available mechanic and returns the new request object.
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.zipdrop.app/v1/requests \
+  -X POST \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "latitude": 51.5074,
+    "longitude": -0.1278,
+    "issue_type": "flat_tyre",
+    "notes": "Front-left tyre, layby on A40 westbound"
+  }'
+```
+
+```json Response
+{
+  "id": "req_01hxyz",
+  "status": "searching",
+  "latitude": 51.5074,
+  "longitude": -0.1278,
+  "issue_type": "flat_tyre",
+  "notes": "Front-left tyre, layby on A40 westbound",
+  "mechanic": null,
+  "created_at": "2024-06-15T14:30:00Z"
+}
+```
+
+</CodeGroup>
+
+### Retrieve request status and mechanic ETA
+
+Send a `GET` request to `/v1/requests/{id}` to poll the current status of a breakdown request. Once a mechanic is assigned, the response includes their details and estimated time of arrival.
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.zipdrop.app/v1/requests/req_01hxyz \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```json Response
+{
+  "id": "req_01hxyz",
+  "status": "mechanic_en_route",
+  "latitude": 51.5074,
+  "longitude": -0.1278,
+  "issue_type": "flat_tyre",
+  "notes": "Front-left tyre, layby on A40 westbound",
+  "mechanic": {
+    "id": "mec_09abc",
+    "name": "James O.",
+    "rating": 4.9,
+    "eta_minutes": 8
+  },
+  "created_at": "2024-06-15T14:30:00Z"
+}
+```
+
+</CodeGroup>
 
 ## Rate limits
 
