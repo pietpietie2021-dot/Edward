@@ -1,0 +1,89 @@
+---
+title: "ZipDrop REST API Overview and Quick Start"
+sidebarTitle: "API Overview"
+description: "The ZipDrop REST API lets you programmatically create breakdown requests, track jobs, and manage mechanic availability. JSON over HTTPS, versioned at /v1."
+---
+
+The ZipDrop REST API gives developers and integration partners programmatic access to the ZipDrop platform. Whether you're embedding roadside assistance into a fleet management system, a connected-car app, or an insurance product, the API lets you create breakdown requests on behalf of drivers, track mechanic locations and ETAs in real time, and manage the full job lifecycle from dispatch through to completion.
+
+## Base URL
+
+All API requests are made to the following base URL:
+
+```
+https://api.zipdrop.app/v1
+```
+
+ZipDrop only accepts requests over **HTTPS**. Any request sent over plain HTTP is rejected with a connection error before it reaches ZipDrop's servers.
+
+## Request and response format
+
+All request bodies and response bodies use **JSON**. Include the `Content-Type: application/json` header on every request that sends a body, such as `POST` and `PATCH` requests. Responses always carry `Content-Type: application/json`.
+
+## Authentication
+
+You authenticate every request by passing your API key as a Bearer token in the `Authorization` header:
+
+```
+Authorization: Bearer YOUR_API_KEY
+```
+
+See [Authentication](/platform/authentication) for instructions on generating your key, securing it, and rotating it without downtime.
+
+## Available endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/requests` | Create a new breakdown request |
+| `GET` | `/v1/requests/{id}` | Get request status and mechanic ETA |
+| `DELETE` | `/v1/requests/{id}` | Cancel an active request |
+| `GET` | `/v1/mechanics/nearby` | List available mechanics near a location |
+| `GET` | `/v1/jobs/{id}` | Get job details (mechanic-facing) |
+| `PATCH` | `/v1/jobs/{id}/status` | Update job status (mechanic-facing) |
+
+## Rate limits
+
+ZipDrop enforces a limit of **100 requests per minute** per API key. If your application exceeds this limit, the API returns a `429 Too Many Requests` response. Every `429` response includes a `Retry-After` header that tells you how many seconds to wait before retrying:
+
+```
+Retry-After: 14
+```
+
+Design your integration to respect this header rather than retrying immediately. If you consistently approach the rate limit, consider batching requests or caching responses where appropriate.
+
+## Error responses
+
+When a request fails, ZipDrop returns a standard error object so your application can handle problems consistently regardless of the endpoint:
+
+```json
+{
+  "error": {
+    "code": "validation_error",
+    "message": "latitude must be between -90 and 90",
+    "request_id": "req_01hxyz"
+  }
+}
+```
+
+The `request_id` field uniquely identifies the request on ZipDrop's servers. Include it when contacting ZipDrop support about a specific API call.
+
+The following error codes are used across the API:
+
+| Code | HTTP status | Meaning |
+|------|-------------|---------|
+| `validation_error` | `400` | One or more request parameters failed validation |
+| `not_found` | `404` | The requested resource does not exist |
+| `unauthorized` | `401` | Your API key is missing or invalid |
+| `rate_limited` | `429` | You have exceeded the rate limit |
+| `no_mechanics_available` | `422` | No mechanics are available near the requested location |
+| `request_already_active` | `409` | The account already has an active breakdown request in progress |
+
+## Versioning
+
+The current API version is **v1**, reflected in the base URL path. ZipDrop uses URL-based versioning — when a breaking change is necessary, it is released under a new version (e.g. `/v2`) while the previous version continues to operate in parallel.
+
+ZipDrop gives all partners at least **12 months' deprecation notice** before retiring a version. You will receive email notification to the address associated with your ZipDrop Business account, and the deprecation date will be published in the developer changelog.
+
+<Note>
+  API access is available to **ZipDrop Business** account holders. If you don't yet have a Business account or would like to discuss a partnership integration, [contact ZipDrop support](https://support.zipdrop.app) to find out more.
+</Note>

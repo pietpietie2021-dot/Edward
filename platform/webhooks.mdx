@@ -1,0 +1,124 @@
+---
+title: "Receive ZipDrop Event Notifications via Webhooks"
+sidebarTitle: "Webhooks"
+description: "ZipDrop webhooks send real-time HTTP POST notifications to your server when key events occur, such as a mechanic accepting a request or a job being completed."
+---
+
+Webhooks let ZipDrop push event notifications to your server the moment something meaningful happens — a mechanic accepts a request, a job is completed, or a driver cancels. Rather than polling the API repeatedly to check for state changes, you register an HTTPS endpoint and ZipDrop delivers a `POST` request to it automatically. This is the recommended approach for building real-time integrations such as driver-facing status updates, fleet dashboards, and billing reconciliation pipelines.
+
+## Setting up a webhook endpoint
+
+Before you register an endpoint with ZipDrop, make sure your server is publicly reachable over HTTPS and is capable of returning a `2xx` response within 10 seconds. Once your endpoint is ready, register it in the ZipDrop dashboard:
+
+<Steps>
+  <Step title="Log in to the ZipDrop dashboard">
+    Go to [https://dashboard.zipdrop.app](https://dashboard.zipdrop.app) and sign in with your Business account credentials.
+  </Step>
+  <Step title="Open the Webhooks settings">
+    Navigate to **Settings → Developer → Webhooks** using the left-hand navigation panel.
+  </Step>
+  <Step title="Add a new endpoint">
+    Click **Add Endpoint** to open the registration form.
+  </Step>
+  <Step title="Enter your endpoint URL">
+    Type or paste your HTTPS endpoint URL into the **Endpoint URL** field. ZipDrop does not accept plain HTTP endpoints.
+  </Step>
+  <Step title="Select events">
+    Choose the events you want your endpoint to receive. You can subscribe to individual events or select all events. You can update your event selection at any time from the dashboard.
+  </Step>
+  <Step title="Save and verify">
+    Click **Save**. ZipDrop immediately sends a test event (`webhook.test`) to your endpoint to confirm it is reachable and returning a `2xx` status. The dashboard shows whether the test delivery succeeded.
+  </Step>
+</Steps>
+
+## Available events
+
+ZipDrop emits the following events across the request and job lifecycle:
+
+| Event | Description |
+|-------|-------------|
+| `request.created` | A new breakdown request was created |
+| `request.mechanic_assigned` | A mechanic accepted the request |
+| `request.mechanic_en_route` | Mechanic started navigating to the driver |
+| `request.mechanic_arrived` | Mechanic marked arrival at the driver's location |
+| `job.started` | Work has begun on the vehicle |
+| `job.completed` | Job was completed and payment processed |
+| `request.cancelled` | Request was cancelled by the driver or mechanic |
+
+## Webhook payload format
+
+ZipDrop delivers all events as JSON `POST` requests. Every payload includes a top-level `event` field identifying the event type, a `created_at` timestamp in ISO 8601 format, and a `data` object containing event-specific details.
+
+Here is an example payload for a `request.mechanic_assigned` event:
+
+```json
+{
+  "event": "request.mechanic_assigned",
+  "created_at": "2024-06-15T14:32:00Z",
+  "data": {
+    "request_id": "req_01hxyz",
+    "mechanic": {
+      "id": "mec_09abc",
+      "name": "James O.",
+      "rating": 4.9,
+      "eta_minutes": 12
+    }
+  }
+}
+```
+
+The shape of the `data` object varies by event type and is documented in the individual endpoint references for each resource.
+
+## Verifying webhook signatures
+
+ZipDrop signs every webhook delivery using **HMAC-SHA256** so you can confirm the request genuinely came from ZipDrop and was not tampered with in transit. The signature is included in the `X-ZipDrop-Signature` header of every `POST` request, as a hex-encoded digest.
+
+You can find your webhook secret in the dashboard under the settings for your registered endpoint (**Settings → Developer → Webhooks → your endpoint → Secret**).
+
+To verify the signature, compute the expected HMAC-SHA256 digest of the raw request body using your webhook secret and compare it to the value in the header. Use a constant-time comparison to prevent timing attacks:
+
+```javascript webhook-handler.js
+const crypto = require('crypto');
+
+function verifySignature(payload, signature, secret) {
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(payload)
+    .digest('hex');
+
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expected)
+  );
+}
+```
+
+Pass the **raw request body bytes** — not a parsed JSON object — to the HMAC function. Parsing and re-serialising the JSON before hashing will produce a different digest and cause legitimate requests to fail verification.
+
+## Retry behaviour
+
+ZipDrop considers a delivery successful when your endpoint returns any `2xx` HTTP status code. If your endpoint returns a non-`2xx` status, is unreachable, or does not respond within 10 seconds, ZipDrop marks the delivery as failed and retries it automatically according to the following schedule:
+
+| Attempt | Delay after previous failure |
+|---------|------------------------------|
+| 1st retry | 1 minute |
+| 2nd retry | 5 minutes |
+| 3rd retry | 30 minutes |
+| 4th retry | 2 hours |
+| 5th retry | 12 hours |
+
+After five consecutive failed delivery attempts, ZipDrop marks the event as permanently failed and stops retrying. You can view failed events and manually trigger a redelivery from the dashboard under **Settings → Developer → Webhooks → your endpoint → Failed Events**.
+
+## Responding to webhooks
+
+Your endpoint should return a `2xx` HTTP status code within **10 seconds** of receiving the request. If ZipDrop does not receive a response within this window, it treats the delivery as failed and begins the retry schedule.
+
+For events that require meaningful work — writing to a database, calling a third-party API, sending a push notification — acknowledge the webhook immediately and hand the processing off to a background queue or worker. This keeps your response time well within the 10-second limit regardless of downstream latency.
+
+<Warning>
+  Always verify the `X-ZipDrop-Signature` header before processing a webhook payload. Without signature verification, an attacker could send spoofed requests to your endpoint that appear to be legitimate ZipDrop events. Reject any request whose signature does not match.
+</Warning>
+
+<Tip>
+  Make your webhook handler idempotent by using `request_id` as a deduplication key. ZipDrop may deliver the same event more than once due to retries — for example, if your endpoint returned a `2xx` response but ZipDrop didn't receive it due to a network issue. Checking whether you've already processed a given `request_id` before acting on it ensures your system stays consistent.
+</Tip>

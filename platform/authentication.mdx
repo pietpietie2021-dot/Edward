@@ -1,0 +1,119 @@
+---
+title: "Authenticate with the ZipDrop API Using API Keys"
+sidebarTitle: "Authentication"
+description: "ZipDrop uses API keys for authentication. Generate your key from the developer dashboard, pass it as a Bearer token, and keep it secret."
+---
+
+ZipDrop authenticates API requests using API keys. Every request you make to the ZipDrop API must include a valid API key — requests without one are rejected before they reach any endpoint logic. Your API key identifies your application and determines which actions your integration is authorised to perform, so generating, storing, and rotating it carefully is an essential part of building a secure integration.
+
+## Getting an API key
+
+API keys are generated from the ZipDrop developer dashboard. You need a ZipDrop Business account before you can create one.
+
+<Steps>
+  <Step title="Log in to your ZipDrop Business account">
+    Go to [https://dashboard.zipdrop.app](https://dashboard.zipdrop.app) and sign in with your Business account credentials.
+  </Step>
+  <Step title="Open the API Keys settings">
+    Navigate to **Settings → Developer → API Keys** using the left-hand navigation panel.
+  </Step>
+  <Step title="Generate a new key">
+    Click **Generate New Key**. Give the key a descriptive name (for example, `Fleet App – Production`) so you can identify it later.
+  </Step>
+  <Step title="Copy your key immediately">
+    ZipDrop displays the full API key **only once**, immediately after generation. Copy it now — once you leave or refresh the page, ZipDrop only shows a redacted version and you cannot retrieve the original value.
+  </Step>
+  <Step title="Store the key securely">
+    Paste the key into a secure location before closing the dialog — an environment variable in your application, or a dedicated secret manager such as AWS Secrets Manager, HashiCorp Vault, or your CI/CD platform's secret store.
+  </Step>
+</Steps>
+
+## Using your API key
+
+Pass your API key in the `Authorization` header of every request using the `Bearer` scheme:
+
+```
+Authorization: Bearer YOUR_API_KEY
+```
+
+The following examples show how to include the header when making a `POST` request to create a breakdown request:
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.zipdrop.app/v1/requests \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"latitude": 51.5074, "longitude": -0.1278, "issue_type": "flat_tyre"}'
+```
+
+```javascript JavaScript (fetch)
+const response = await fetch('https://api.zipdrop.app/v1/requests', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    latitude: 51.5074,
+    longitude: -0.1278,
+    issue_type: 'flat_tyre'
+  })
+});
+
+const data = await response.json();
+```
+
+```python Python (requests)
+import requests
+
+response = requests.post(
+    'https://api.zipdrop.app/v1/requests',
+    headers={'Authorization': 'Bearer YOUR_API_KEY'},
+    json={
+        'latitude': 51.5074,
+        'longitude': -0.1278,
+        'issue_type': 'flat_tyre'
+    }
+)
+
+data = response.json()
+```
+
+</CodeGroup>
+
+## Authentication errors
+
+If your API key is missing, malformed, or invalid, ZipDrop returns a `401 Unauthorized` response. If your key is valid but does not have permission to perform the requested action (for example, a key scoped to driver-facing endpoints attempting to update job status), ZipDrop returns a `403 Forbidden` response.
+
+Both responses use the standard error body:
+
+```json
+{
+  "error": {
+    "code": "unauthorized",
+    "message": "Invalid API key",
+    "request_id": "req_01habc"
+  }
+}
+```
+
+If you receive a persistent `401` after confirming your key is correct, verify that you haven't introduced extra whitespace when reading the key from your environment, and confirm the key hasn't been revoked in the dashboard.
+
+## Rotating API keys
+
+You should rotate your API key if it is accidentally exposed, as part of a regular security practice, or when offboarding a team member who had access to it. ZipDrop supports zero-downtime rotation:
+
+1. **Generate a new key** in the dashboard, following the steps in [Getting an API key](#getting-an-api-key) above.
+2. **Update your application** to use the new key. Deploy the change and confirm your integration is operating correctly.
+3. **Revoke the old key** in the dashboard under **Settings → Developer → API Keys**.
+
+Your old key remains valid for **24 hours** after you generate a new one. This window gives you time to deploy your updated application and verify it before the old key is permanently invalidated — so you don't need to schedule a maintenance window for a key rotation.
+
+<Warning>
+  Never expose your API key in client-side code (browser JavaScript, mobile app binaries) or commit it to a public repository. Anyone with your key can make API calls that are billed to your account and attributed to your identity. If you suspect your key has been compromised, revoke it in the dashboard immediately.
+</Warning>
+
+<Tip>
+  Use separate API keys for your development and production environments. This limits the blast radius if a key is leaked, lets you revoke a development key without affecting production traffic, and makes it easier to audit API usage by environment in the dashboard.
+</Tip>
